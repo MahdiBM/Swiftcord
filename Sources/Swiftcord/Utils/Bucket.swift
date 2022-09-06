@@ -8,6 +8,7 @@
 
 import Foundation
 import Dispatch
+import NIOConcurrencyHelpers
 
 /// Rate Limit Thing
 class Bucket {
@@ -35,6 +36,8 @@ class Bucket {
     /// Used for Dispatch, but is basically ^
     var lastResetDispatch = DispatchTime.now()
 
+    let lock = Lock()
+    
     // MARK: Initializer
 
     /**
@@ -55,6 +58,9 @@ class Bucket {
 
     /// Check for token renewal and amount of tokens in bucket. If there are no more tokens then tell Dispatch to execute this function after deadline
     func check() {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        
         let now = Date()
 
         if now.timeIntervalSince(self.lastReset) > Double(self.interval) {
@@ -78,6 +84,8 @@ class Bucket {
 
     /// Executes the first DispatchWorkItem in self.queue and removes a token from the bucket.
     func execute() {
+        self.lock.lock()
+        defer { self.lock.unlock() }
         let item = self.queue.remove(at: 0)
         self.tokens -= 1
         self.worker.async(execute: item)
@@ -89,7 +97,9 @@ class Bucket {
      - parameter item: Code block to execute
      */
     func queue(_ item: DispatchWorkItem) {
-        self.queue.append(item)
+        self.lock.withLockVoid {
+            self.queue.append(item)
+        }
         self.check()
     }
 
@@ -99,7 +109,9 @@ class Bucket {
      - parameter num: Amount of tokens to take
      */
     func take(_ num: Int) {
-        self.tokens -= num
+        self.lock.withLockVoid {
+            self.tokens -= num
+        }
     }
 
 }

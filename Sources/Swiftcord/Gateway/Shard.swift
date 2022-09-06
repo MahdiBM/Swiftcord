@@ -11,17 +11,18 @@ import Dispatch
 import WebSocketKit
 import NIOPosix
 import NIOCore
+import NIOConcurrencyHelpers
 
 /// WS class
 class Shard: Gateway {
-
+    
     // MARK: Properties
     /// Gateway URL for gateway
     var gatewayUrl = ""
 
     /// Global Event Rate Limiter
     let globalBucket: Bucket
-
+    
     /// Heartbeat to send
     var heartbeatPayload: Payload {
         return Payload(op: .heartbeat, data: self.lastSeq ?? NSNull())
@@ -32,22 +33,22 @@ class Shard: Gateway {
 
     /// ID of shard
     let id: Int
-
+    
     /// Whether or not the shard is connected to gateway
     var isConnected = false
-
+    
     /// The last sequence sent by Discord
     var lastSeq: Int?
 
     /// Presence Event Rate Limiter
     let presenceBucket: Bucket
-
+    
     /// Whether or not the shard is reconnecting
     var isReconnecting = false
-
+    
     /// WS
     var session: WebSocket?
-
+    
     /// Session ID of gateway
     var sessionId: String?
 
@@ -58,11 +59,14 @@ class Shard: Gateway {
     unowned let swiftcord: Swiftcord
 
     /// Number of missed heartbeat ACKs
+    
     var acksMissed = 0
     
     let eventLoopGroup: EventLoopGroup
     let eventLoopGroupProvided: Bool
-
+    
+    let lock = Lock()
+    
     // MARK: Initializer
     /**
      Creates Shard Handler
@@ -116,7 +120,9 @@ class Shard: Gateway {
     func handlePayload(_ payload: Payload) async {
 
         if let sequenceNumber = payload.s {
-            self.lastSeq = sequenceNumber
+            self.lock.withLockVoid {
+                self.lastSeq = sequenceNumber
+            }
         }
 
         guard payload.t != nil else {
@@ -137,7 +143,9 @@ class Shard: Gateway {
      - parameter code: Close code for the gateway closing
      */
     func handleDisconnect(for code: Int) async {
-        self.isReconnecting = true
+        self.lock.withLockVoid {
+            self.isReconnecting = true
+        }
 
         self.swiftcord.debug("status of the bot to disconnected")
         
@@ -276,13 +284,16 @@ class Shard: Gateway {
     /// Used to reconnect to gateway
     func reconnect() async {
         self.swiftcord.warn("Status of isConnected: \(self.isConnected)")
+        
+        self.lock.lock() // LOCK
         if self.isConnected {
             _ = try? await self.session?.close()
             self.swiftcord.warn("Connection successfully closed")
         }
-
+        
         self.isConnected = false
         self.acksMissed = 0
+        self.lock.unlock() // UNLOCK
 
         self.swiftcord.log("Disconnected from gateway... Resuming session")
 
@@ -319,10 +330,12 @@ class Shard: Gateway {
     /// Used to stop WS connection
     func stop() {
         _ = self.session?.close(code: .goingAway)
-
-        self.isConnected = false
-        self.isReconnecting = false
-        self.acksMissed = 0
+        
+        self.lock.withLockVoid {
+            self.isConnected = false
+            self.isReconnecting = false
+            self.acksMissed = 0
+        }
 
         self.swiftcord.log("Stopping gateway connection...")
     }

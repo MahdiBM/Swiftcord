@@ -383,7 +383,9 @@ extension Shard {
             /// READY
             case .ready:
                 self.swiftcord.readyTimestamp = Date()
-                self.sessionId = data["session_id"] as? String
+                self.lock.withLockVoid {
+                    self.sessionId = data["session_id"] as? String
+                }
 
                 let guilds = data["guilds"] as! [[String: Any]]
 

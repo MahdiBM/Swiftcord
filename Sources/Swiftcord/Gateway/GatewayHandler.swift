@@ -36,7 +36,9 @@ extension Shard {
         /// OP: 10
         case .hello:
             self.heartbeat(at: (payload.d as! [String: Any])["heartbeat_interval"] as! Int)
-
+            
+            self.lock.lock()
+            defer { self.lock.unlock() }
             guard !self.isReconnecting else {
                 self.isReconnecting = false
                 let data: [String: Any] = [
@@ -54,12 +56,16 @@ extension Shard {
 
         /// OP: 9
         case .invalidSession:
-            self.isReconnecting = payload.d as! Bool
+            self.lock.withLockVoid {
+                self.isReconnecting = payload.d as! Bool
+            }
             await self.reconnect()
 
         /// OP: 7
         case .reconnect:
-            self.isReconnecting = true
+            self.lock.withLockVoid {
+                self.isReconnecting = true
+            }
             await self.reconnect()
 
         /// Others
