@@ -287,6 +287,7 @@ class Shard: Gateway {
         
         self.lock.lock() // LOCK
         if self.isConnected {
+            self.lock.unlock() // UNLOCK
             _ = try? await self.session?.close()
             self.swiftcord.warn("Connection successfully closed")
         }
