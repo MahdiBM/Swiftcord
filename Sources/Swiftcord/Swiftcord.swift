@@ -121,7 +121,7 @@ open class Swiftcord {
      - parameter token: The bot token
      - parameter options: Options to give bot (sharding, offline members, etc)
      */
-    public init(token: String, options: SwiftcordOptions = SwiftcordOptions(), logger: Logger? = nil, eventLoopGroup: EventLoopGroup?) {
+    public init(token: String, options: SwiftcordOptions = SwiftcordOptions(), logger: Logger? = nil, eventLoopGroup: EventLoopGroup? = nil) {
         self.options = options
         self.token = token
         if let logger = logger {
