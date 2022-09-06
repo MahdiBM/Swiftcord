@@ -59,7 +59,6 @@ class Bucket {
     /// Check for token renewal and amount of tokens in bucket. If there are no more tokens then tell Dispatch to execute this function after deadline
     func check() {
         self.lock.lock()
-        defer { self.lock.unlock() }
         
         let now = Date()
 
@@ -70,6 +69,7 @@ class Bucket {
         }
 
         guard self.tokens > 0 else {
+            self.lock.unlock()
             self.worker.asyncAfter(
                 deadline: self.lastResetDispatch + .seconds(self.interval + 1)
             ) {
@@ -78,7 +78,8 @@ class Bucket {
 
             return
         }
-
+        
+        self.lock.unlock()
         self.execute()
     }
 
